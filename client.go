@@ -801,7 +801,6 @@ func (c *Client) Do(req *Request) (*http.Response, error) {
 					v.Printf("[DEBUG] standard client %s %s", req.Method, req.URL)
 				}
 			}
-
 			resp, doErr = c.HTTPClient.Do(req.Request)
 		} else {
 			fmt.Printf("%s %s \n\r", "Get request, using download in chunks ")
