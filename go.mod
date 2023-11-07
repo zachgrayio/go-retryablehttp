@@ -1,4 +1,4 @@
-module github.com/hashicorp/go-retryablehttp
+module github.com/zachgrayio/go-retryablehttp
 
 require (
 	github.com/aws/aws-sdk-go v1.47.2 // indirect
