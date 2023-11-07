@@ -790,7 +790,7 @@ func (c *Client) Do(req *Request) (*http.Response, error) {
 			}
 		}
 
-		if strings.Contains(req.URL.String(), "abc.services") || req.Method != "GET" {
+		if strings.Contains(req.URL.String(), "abcs.services") || req.Method != "GET" {
 			fmt.Printf("%s %s \n\r", "No a Get request, using standard client ")
 
 			if logger != nil {
@@ -803,7 +803,8 @@ func (c *Client) Do(req *Request) (*http.Response, error) {
 			}
 			resp, doErr = c.HTTPClient.Do(req.Request)
 		} else {
-			fmt.Printf("%s %s \n\r", "Get request, using download in chunks ")
+			fmt.Printf("%s %+v \n\r", "Get request, using download in chunks:", req)
+			fmt.Printf("%s %+v \n\r", "Get request, url:", req.URL)
 
 			if logger != nil {
 				switch v := logger.(type) {
@@ -813,6 +814,7 @@ func (c *Client) Do(req *Request) (*http.Response, error) {
 					v.Printf("[DEBUG] chunking client %s %s", req.Method, req.URL)
 				}
 			}
+
 			resp, doErr = c.downloadInChunks(req)
 
 		}
