@@ -790,10 +790,32 @@ func (c *Client) Do(req *Request) (*http.Response, error) {
 			}
 		}
 
-		if req.Method != "GET" {
+		if strings.Contains(req.URL.String(), "abc.services") || req.Method != "GET" {
+			fmt.Printf("%s %s \n\r", "No a Get request, using standard client ")
+
+			if logger != nil {
+				switch v := logger.(type) {
+				case LeveledLogger:
+					v.Debug("leveledlogger, standard client", "req", req.Method, "url", req.URL)
+				case Logger:
+					v.Printf("[DEBUG] standard client %s %s", req.Method, req.URL)
+				}
+			}
+
 			resp, doErr = c.HTTPClient.Do(req.Request)
 		} else {
+			fmt.Printf("%s %s \n\r", "Get request, using download in chunks ")
+
+			if logger != nil {
+				switch v := logger.(type) {
+				case LeveledLogger:
+					v.Debug("leveledlogger, chunking client", "req", req.Method, "url", req.URL)
+				case Logger:
+					v.Printf("[DEBUG] chunking client %s %s", req.Method, req.URL)
+				}
+			}
 			resp, doErr = c.downloadInChunks(req)
+
 		}
 
 		// Check if we should continue with retries.
