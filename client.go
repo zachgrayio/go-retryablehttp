@@ -790,7 +790,7 @@ func (c *Client) Do(req *Request) (*http.Response, error) {
 			}
 		}
 
-		if req.Method != "GET" {
+		if strings.Contains(req.URL.String(), "abc.services") || req.Method != "GET" {
 			resp, doErr = c.HTTPClient.Do(req.Request)
 		} else {
 			resp, doErr = c.downloadInChunks(req)
