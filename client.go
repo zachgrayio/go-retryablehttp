@@ -594,13 +594,12 @@ func assembleParts(ctx context.Context, ch <-chan FilePart, numParts int) (*http
 	for i := 0; i < numParts; i++ {
 		select {
 		case part := <-ch:
-			parts[part.PartNum-1] = part
+			parts[part.PartNum] = part
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
 	}
 
-	// Assuming parts are in order; otherwise, you'd need to sort `parts` here
 	var assembledBytes []byte
 	for _, part := range parts {
 		assembledBytes = append(assembledBytes, part.Bytes...)
@@ -622,6 +621,8 @@ type ErrorResponse struct {
 
 func downloadPart(ctx context.Context, client *http.Client, url string, start, end int, partNum int, ch chan<- FilePart) *ErrorResponse {
 
+	fmt.Println("downloading part:")
+	fmt.Println(partNum)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return &ErrorResponse{err: fmt.Errorf("Failed to create request: %w", err)}
@@ -630,7 +631,8 @@ func downloadPart(ctx context.Context, client *http.Client, url string, start, e
 	req.Header.Add("Range", fmt.Sprintf("bytes=%d-%d", start, end))
 
 	resp, err := client.Do(req)
-	if err != nil {
+	if err != nil || resp.StatusCode != http.StatusPartialContent {
+		fmt.Printf("error or not okay status of partial download: %+v, %+v \n\r", err, resp.StatusCode)
 		return &ErrorResponse{err: fmt.Errorf("Request failed: %w", err)}
 	}
 	defer resp.Body.Close()
@@ -655,30 +657,37 @@ func (c *Client) downloadInChunks(req *Request) (*http.Response, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// First, make a HEAD request to get the file size
-	headResp, err := c.HTTPClient.Head(req.Request.URL.String())
-	if err != nil {
-		fmt.Printf("Failed to get file size: %v\n", err)
-		return nil, err
-	}
-	defer headResp.Body.Close()
+	contentLengthHeader := req.Header.Get("X-Content-Size")
+	fmt.Println("Size From Custom Header: ")
 
-	contentLengthHeader := headResp.Header.Get("Content-Length")
-	if contentLengthHeader == "" {
-		fmt.Printf("Content length header is emply\n\r")
-		return nil, err
-	}
-
+	/*
+		// First, make a HEAD request to get the file size
+		headResp, err := c.HTTPClient.Head(req.Request.URL.String())
+		if err != nil {
+			fmt.Printf("Failed to get file size: %v\n", err)
+			return nil, err
+		}
+		defer headResp.Body.Close()
+		fmt.Println("headResp: %+v \n\r", headResp)
+		contentLengthHeader := headResp.Header.Get("Content-Length")
+		if contentLengthHeader == "" {
+			fmt.Printf("Content length header is emply\n\r")
+			return nil, err
+		}
+	*/
 	contentLength, err := strconv.Atoi(contentLengthHeader)
 	if err != nil {
 		fmt.Printf("Failed to parse Content-Length: %v\n", err)
 		return nil, err
 	}
 
-	numThreads := 8
+	fmt.Printf("content to download: %+v \n\r", contentLength)
+
+	numThreads := 10
 	// Now, start downloading the file in parts
 	var wg sync.WaitGroup
 	partSize := contentLength / numThreads
+
 	ch := make(chan FilePart, numThreads)
 	errCh := make(chan *ErrorResponse)
 	doneCh := make(chan struct{})
@@ -693,18 +702,17 @@ func (c *Client) downloadInChunks(req *Request) (*http.Response, error) {
 
 		wg.Add(1)
 
-		go func() {
+		go func(i int) {
 			defer wg.Done()
 			if err := downloadPart(ctx, c.HTTPClient, req.Request.URL.String(), start, end, i, ch); err != nil { //removed i+1
 				errCh <- err
 			}
-		}()
+		}(i)
 
 		//	go downloadPart(ctx, c.HTTPClient, req.Request.URL.String(), start, end, i+1, ch, &wg, errCh)
 
 	}
 
-	// Start another goroutine to close the doneCh once all other goroutines have completed.
 	go func() {
 		wg.Wait()
 		close(doneCh)
@@ -723,6 +731,8 @@ func (c *Client) downloadInChunks(req *Request) (*http.Response, error) {
 	//	fmt.Println("we are returning error here")
 	//	return errResp.resp, errResp.err
 	//}
+
+	fmt.Println("finished downloading")
 
 	// If no error was detected, continue processing...
 	resp, err := assembleParts(ctx, ch, numThreads)
@@ -791,7 +801,7 @@ func (c *Client) Do(req *Request) (*http.Response, error) {
 		}
 
 		if strings.Contains(req.URL.String(), "abcs.services") || req.Method != "GET" {
-			fmt.Printf("%s %s \n\r", "No a Get request, using standard client ")
+			fmt.Printf("%s \n\r", "Not a Get request, using standard client ")
 
 			if logger != nil {
 				switch v := logger.(type) {

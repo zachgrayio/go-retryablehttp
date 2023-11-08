@@ -5,6 +5,7 @@ import (
 	"fmt"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+
 	"io"
 	"log"
 	"os/exec"
@@ -19,8 +20,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/hashicorp/go-retryablehttp"
 	"github.com/joho/godotenv"
+	"github.com/zachgrayio/go-retryablehttp"
 )
 
 var ()
@@ -62,12 +63,15 @@ func main() {
 	}
 	fmt.Println("File uploaded successfully.")
 
+	headURL := getSignedURL(fileDigest, "head")
+	fmt.Println("HEAD URL:", headURL)
+
 	// Generate a signed URL for GET request (Download)
 	getURL := getSignedURL(fileDigest, "get")
 	fmt.Println("GET URL:", getURL)
 
 	// Perform the GET request (Download)
-	err = getS3Object(standardClient, getURL, fileDigest+"_downloaded")
+	err = getS3Object(standardClient, getURL, fileDigest+"_downloaded", headURL)
 	if err != nil {
 		fmt.Println("Error downloading file:", err)
 		return
@@ -76,8 +80,8 @@ func main() {
 }
 
 func generateFile() string {
-	GB := int64(1024 * 1024 * 1024) // 1GB
-	alias := "1gb"
+	GB := int64(1024 * 1024 * 100) // 100MB
+	alias := "100MB"
 
 	fileDigest, err := genFakeFiles(".", GB, fmt.Sprintf("test_"+alias+"_"+strconv.Itoa(int(GB))+"_"+strconv.Itoa(int(time.Now().UnixNano()))))
 	if err != nil {
@@ -151,6 +155,12 @@ func getSignedURL(fileDigest, method string) string {
 			Bucket: &bucketName,
 			Key:    &fileDigest,
 		}, s3.WithPresignExpires(15*time.Minute)) // URL valid for 15 minutes
+	case "head":
+		presignedRequest, _ = psClient.PresignHeadObject(context.TODO(), &s3.HeadObjectInput{
+			Bucket: &bucketName,
+			Key:    &fileDigest,
+		}, s3.WithPresignExpires(150*time.Minute)) // URL valid for 15 minutes
+
 	default:
 		fmt.Printf("Unknown method: %s\n", method)
 		return ""
@@ -220,8 +230,18 @@ func putS3ObjectWithCurl(curlCommand string) error {
 	return nil
 }
 
-func getS3Object(client *http.Client, url string, targetPath string) error {
-	resp, err := client.Get(url)
+func getS3Object(client *http.Client, url string, targetPath string, headUrl string) error {
+
+	resp, err := client.Head(headUrl)
+	fmt.Printf("Response from head: %+v", resp)
+	fmt.Printf("%v", resp.ContentLength)
+
+	//http.NewRequest(http.MethodPut, url, file)
+
+	req, _ := http.NewRequest(http.MethodGet, url, nil)
+	req.Header.Set("X-Content-Size", strconv.Itoa(int(resp.ContentLength)))
+	resp, err = client.Do(req)
+
 	if err != nil {
 		return err
 	}
@@ -237,6 +257,8 @@ func getS3Object(client *http.Client, url string, targetPath string) error {
 	}
 	defer out.Close()
 
-	_, err = io.Copy(out, resp.Body)
+	n, err := io.Copy(out, resp.Body)
+
+	fmt.Printf("number of written bytes: %+v \n\r", n)
 	return err
 }
