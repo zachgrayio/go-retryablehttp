@@ -621,8 +621,7 @@ type ErrorResponse struct {
 
 func downloadPart(ctx context.Context, client *http.Client, url string, start, end int, partNum int, ch chan<- FilePart) *ErrorResponse {
 
-	fmt.Println("downloading part:")
-	fmt.Println(partNum)
+	fmt.Printf("downloading part: %v, %v,%v \n\r", partNum, start, end)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return &ErrorResponse{err: fmt.Errorf("Failed to create request: %w", err)}
@@ -641,6 +640,9 @@ func downloadPart(ctx context.Context, client *http.Client, url string, start, e
 		return &ErrorResponse{resp: resp, err: nil}
 	}
 
+	fmt.Printf("Content length for part: %+v, %+v \n\r", resp.ContentLength, partNum)
+	fmt.Printf("Status Code for part: %+v\n\r", resp.StatusCode, partNum)
+
 	bytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return &ErrorResponse{err: fmt.Errorf("Failed to read response body for part %d: %w", partNum, err)}
@@ -653,6 +655,22 @@ func downloadPart(ctx context.Context, client *http.Client, url string, start, e
 
 }
 
+/*
+	// First, make a HEAD request to get the file size
+	headResp, err := c.HTTPClient.Head(req.Request.URL.String())
+	if err != nil {
+		fmt.Printf("Failed to get file size: %v\n", err)
+		return nil, err
+	}
+	defer headResp.Body.Close()
+	fmt.Println("headResp: %+v \n\r", headResp)
+	contentLengthHeader := headResp.Header.Get("Content-Length")
+	if contentLengthHeader == "" {
+		fmt.Printf("Content length header is emply\n\r")
+		return nil, err
+	}
+*/
+
 func (c *Client) downloadInChunks(req *Request) (*http.Response, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -660,21 +678,6 @@ func (c *Client) downloadInChunks(req *Request) (*http.Response, error) {
 	contentLengthHeader := req.Header.Get("X-Content-Size")
 	fmt.Println("Size From Custom Header: ")
 
-	/*
-		// First, make a HEAD request to get the file size
-		headResp, err := c.HTTPClient.Head(req.Request.URL.String())
-		if err != nil {
-			fmt.Printf("Failed to get file size: %v\n", err)
-			return nil, err
-		}
-		defer headResp.Body.Close()
-		fmt.Println("headResp: %+v \n\r", headResp)
-		contentLengthHeader := headResp.Header.Get("Content-Length")
-		if contentLengthHeader == "" {
-			fmt.Printf("Content length header is emply\n\r")
-			return nil, err
-		}
-	*/
 	contentLength, err := strconv.Atoi(contentLengthHeader)
 	if err != nil {
 		fmt.Printf("Failed to parse Content-Length: %v\n", err)
@@ -683,7 +686,7 @@ func (c *Client) downloadInChunks(req *Request) (*http.Response, error) {
 
 	fmt.Printf("content to download: %+v \n\r", contentLength)
 
-	numThreads := 10
+	numThreads := 100
 	// Now, start downloading the file in parts
 	var wg sync.WaitGroup
 	partSize := contentLength / numThreads
@@ -709,8 +712,6 @@ func (c *Client) downloadInChunks(req *Request) (*http.Response, error) {
 			}
 		}(i)
 
-		//	go downloadPart(ctx, c.HTTPClient, req.Request.URL.String(), start, end, i+1, ch, &wg, errCh)
-
 	}
 
 	go func() {
@@ -725,12 +726,6 @@ func (c *Client) downloadInChunks(req *Request) (*http.Response, error) {
 	case <-doneCh:
 		close(errCh) // Close the error channel.
 	}
-
-	// Check if context was canceled, indicating an error occurred
-	//if ctx.Err() == context.Canceled {
-	//	fmt.Println("we are returning error here")
-	//	return errResp.resp, errResp.err
-	//}
 
 	fmt.Println("finished downloading")
 
