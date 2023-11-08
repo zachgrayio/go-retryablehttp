@@ -47,22 +47,23 @@ func main() {
 	//}
 
 	// Generate a file and get the digest (file name in this context)
-	fileDigest := generateFile()
+	//	fileDigest := generateFile()
 
 	// Generate a signed URL for PUT request (Upload)
-	putURL := getSignedURL(fileDigest, "put")
-	fmt.Println("PUT URL:", putURL)
+	//	putURL := getSignedURL(fileDigest, "put")
+	//	fmt.Println("PUT URL:", putURL)
 
 	// Perform the PUT request (Upload)
-	err := putS3Object(standardClient, putURL, fileDigest)
+	//	err := putS3Object(standardClient, putURL, fileDigest)
 	//curlCommand := fmt.Sprintf(`curl --sslv3 --http1.1 -v -T %s -H "Content-Type: application/octet-stream" %s`, fileDigest, putURL)
 	//err := putS3ObjectWithCurl(curlCommand)
-	if err != nil {
-		fmt.Println("Error uploading file:", err)
-		return
-	}
-	fmt.Println("File uploaded successfully.")
+	//if err != nil {
+	//	fmt.Println("Error uploading file:", err)
+	//	return
+	//}
+	//fmt.Println("File uploaded successfully.")
 
+	fileDigest := "test_10000_1682030460.95262"
 	headURL := getSignedURL(fileDigest, "head")
 	fmt.Println("HEAD URL:", headURL)
 
@@ -71,7 +72,7 @@ func main() {
 	fmt.Println("GET URL:", getURL)
 
 	// Perform the GET request (Download)
-	err = getS3Object(standardClient, getURL, fileDigest+"_downloaded", headURL)
+	err := getS3Object(standardClient, getURL, fileDigest+"_downloaded", headURL)
 	if err != nil {
 		fmt.Println("Error downloading file:", err)
 		return
